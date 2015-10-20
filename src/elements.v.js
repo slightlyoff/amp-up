@@ -6884,6 +6884,586 @@ Polymer({
     }
 
   });
+/**
+   * @param {!Function} selectCallback
+   * @constructor
+   */
+  Polymer.IronSelection = function(selectCallback) {
+    this.selection = [];
+    this.selectCallback = selectCallback;
+  };
+
+  Polymer.IronSelection.prototype = {
+
+    /**
+     * Retrieves the selected item(s).
+     *
+     * @method get
+     * @returns Returns the selected item(s). If the multi property is true,
+     * `get` will return an array, otherwise it will return
+     * the selected item or undefined if there is no selection.
+     */
+    get: function() {
+      return this.multi ? this.selection.slice() : this.selection[0];
+    },
+
+    /**
+     * Clears all the selection except the ones indicated.
+     *
+     * @method clear
+     * @param {Array} excludes items to be excluded.
+     */
+    clear: function(excludes) {
+      this.selection.slice().forEach(function(item) {
+        if (!excludes || excludes.indexOf(item) < 0) {
+          this.setItemSelected(item, false);
+        }
+      }, this);
+    },
+
+    /**
+     * Indicates if a given item is selected.
+     *
+     * @method isSelected
+     * @param {*} item The item whose selection state should be checked.
+     * @returns Returns true if `item` is selected.
+     */
+    isSelected: function(item) {
+      return this.selection.indexOf(item) >= 0;
+    },
+
+    /**
+     * Sets the selection state for a given item to either selected or deselected.
+     *
+     * @method setItemSelected
+     * @param {*} item The item to select.
+     * @param {boolean} isSelected True for selected, false for deselected.
+     */
+    setItemSelected: function(item, isSelected) {
+      if (item != null) {
+        if (isSelected) {
+          this.selection.push(item);
+        } else {
+          var i = this.selection.indexOf(item);
+          if (i >= 0) {
+            this.selection.splice(i, 1);
+          }
+        }
+        if (this.selectCallback) {
+          this.selectCallback(item, isSelected);
+        }
+      }
+    },
+
+    /**
+     * Sets the selection state for a given item. If the `multi` property
+     * is true, then the selected state of `item` will be toggled; otherwise
+     * the `item` will be selected.
+     *
+     * @method select
+     * @param {*} item The item to select.
+     */
+    select: function(item) {
+      if (this.multi) {
+        this.toggle(item);
+      } else if (this.get() !== item) {
+        this.setItemSelected(this.get(), false);
+        this.setItemSelected(item, true);
+      }
+    },
+
+    /**
+     * Toggles the selection state for `item`.
+     *
+     * @method toggle
+     * @param {*} item The item to toggle.
+     */
+    toggle: function(item) {
+      this.setItemSelected(item, !this.isSelected(item));
+    }
+
+  };
+/** @polymerBehavior */
+  Polymer.IronSelectableBehavior = {
+
+      /**
+       * Fired when iron-selector is activated (selected or deselected).
+       * It is fired before the selected items are changed.
+       * Cancel the event to abort selection.
+       *
+       * @event iron-activate
+       */
+
+      /**
+       * Fired when an item is selected
+       *
+       * @event iron-select
+       */
+
+      /**
+       * Fired when an item is deselected
+       *
+       * @event iron-deselect
+       */
+
+      /**
+       * Fired when the list of selectable items changes (e.g., items are
+       * added or removed). The detail of the event is a list of mutation
+       * records that describe what changed.
+       *
+       * @event iron-items-changed
+       */
+
+    properties: {
+
+      /**
+       * If you want to use the attribute value of an element for `selected` instead of the index,
+       * set this to the name of the attribute.
+       */
+      attrForSelected: {
+        type: String,
+        value: null
+      },
+
+      /**
+       * Gets or sets the selected element. The default is to use the index of the item.
+       */
+      selected: {
+        type: String,
+        notify: true
+      },
+
+      /**
+       * Returns the currently selected item.
+       */
+      selectedItem: {
+        type: Object,
+        readOnly: true,
+        notify: true
+      },
+
+      /**
+       * The event that fires from items when they are selected. Selectable
+       * will listen for this event from items and update the selection state.
+       * Set to empty string to listen to no events.
+       */
+      activateEvent: {
+        type: String,
+        value: 'tap',
+        observer: '_activateEventChanged'
+      },
+
+      /**
+       * This is a CSS selector string.  If this is set, only items that match the CSS selector
+       * are selectable.
+       */
+      selectable: String,
+
+      /**
+       * The class to set on elements when selected.
+       */
+      selectedClass: {
+        type: String,
+        value: 'iron-selected'
+      },
+
+      /**
+       * The attribute to set on elements when selected.
+       */
+      selectedAttribute: {
+        type: String,
+        value: null
+      },
+
+      /**
+       * The set of excluded elements where the key is the `localName`
+       * of the element that will be ignored from the item list.
+       *
+       * @type {object}
+       * @default {template: 1}
+       */
+      _excludedLocalNames: {
+        type: Object,
+        value: function() {
+          return {
+            'template': 1
+          };
+        }
+      }
+    },
+
+    observers: [
+      '_updateSelected(attrForSelected, selected)'
+    ],
+
+    created: function() {
+      this._bindFilterItem = this._filterItem.bind(this);
+      this._selection = new Polymer.IronSelection(this._applySelection.bind(this));
+      // TODO(cdata): When polymer/polymer#2535 lands, we do not need to do this
+      // book keeping anymore:
+      this.__listeningForActivate = false;
+    },
+
+    attached: function() {
+      this._observer = this._observeItems(this);
+      this._contentObserver = this._observeContent(this);
+      if (!this.selectedItem && this.selected) {
+        this._updateSelected(this.attrForSelected,this.selected)
+      }
+      this._addListener(this.activateEvent);
+    },
+
+    detached: function() {
+      if (this._observer) {
+        this._observer.disconnect();
+      }
+      if (this._contentObserver) {
+        this._contentObserver.disconnect();
+      }
+      this._removeListener(this.activateEvent);
+    },
+
+    /**
+     * Returns an array of selectable items.
+     *
+     * @property items
+     * @type Array
+     */
+    get items() {
+      var nodes = Polymer.dom(this).queryDistributedElements(this.selectable || '*');
+      return Array.prototype.filter.call(nodes, this._bindFilterItem);
+    },
+
+    /**
+     * Returns the index of the given item.
+     *
+     * @method indexOf
+     * @param {Object} item
+     * @returns Returns the index of the item
+     */
+    indexOf: function(item) {
+      return this.items.indexOf(item);
+    },
+
+    /**
+     * Selects the given value.
+     *
+     * @method select
+     * @param {string} value the value to select.
+     */
+    select: function(value) {
+      this.selected = value;
+    },
+
+    /**
+     * Selects the previous item.
+     *
+     * @method selectPrevious
+     */
+    selectPrevious: function() {
+      var length = this.items.length;
+      var index = (Number(this._valueToIndex(this.selected)) - 1 + length) % length;
+      this.selected = this._indexToValue(index);
+    },
+
+    /**
+     * Selects the next item.
+     *
+     * @method selectNext
+     */
+    selectNext: function() {
+      var index = (Number(this._valueToIndex(this.selected)) + 1) % this.items.length;
+      this.selected = this._indexToValue(index);
+    },
+
+    _addListener: function(eventName) {
+      if (!this.isAttached || this.__listeningForActivate) {
+        return;
+      }
+
+      this.__listeningForActivate = true;
+      this.listen(this, eventName, '_activateHandler');
+    },
+
+    _removeListener: function(eventName) {
+      this.unlisten(this, eventName, '_activateHandler');
+      this.__listeningForActivate = false;
+    },
+
+    _activateEventChanged: function(eventName, old) {
+      this._removeListener(old);
+      this._addListener(eventName);
+    },
+
+    _updateSelected: function() {
+      this._selectSelected(this.selected);
+    },
+
+    _selectSelected: function(selected) {
+      this._selection.select(this._valueToItem(this.selected));
+    },
+
+    _filterItem: function(node) {
+      return !this._excludedLocalNames[node.localName];
+    },
+
+    _valueToItem: function(value) {
+      return (value == null) ? null : this.items[this._valueToIndex(value)];
+    },
+
+    _valueToIndex: function(value) {
+      if (this.attrForSelected) {
+        for (var i = 0, item; item = this.items[i]; i++) {
+          if (this._valueForItem(item) == value) {
+            return i;
+          }
+        }
+      } else {
+        return Number(value);
+      }
+    },
+
+    _indexToValue: function(index) {
+      if (this.attrForSelected) {
+        var item = this.items[index];
+        if (item) {
+          return this._valueForItem(item);
+        }
+      } else {
+        return index;
+      }
+    },
+
+    _valueForItem: function(item) {
+      return item[this.attrForSelected] || item.getAttribute(this.attrForSelected);
+    },
+
+    _applySelection: function(item, isSelected) {
+      if (this.selectedClass) {
+        this.toggleClass(this.selectedClass, isSelected, item);
+      }
+      if (this.selectedAttribute) {
+        this.toggleAttribute(this.selectedAttribute, isSelected, item);
+      }
+      this._selectionChange();
+      this.fire('iron-' + (isSelected ? 'select' : 'deselect'), {item: item});
+    },
+
+    _selectionChange: function() {
+      this._setSelectedItem(this._selection.get());
+    },
+
+    // observe content changes under the given node.
+    _observeContent: function(node) {
+      var content = node.querySelector('content');
+      if (content && content.parentElement === node) {
+        return this._observeItems(node.domHost);
+      }
+    },
+
+    // observe items change under the given node.
+    _observeItems: function(node) {
+      // TODO(cdata): Update this when we get distributed children changed.
+      var observer = new MutationObserver(function(mutations) {
+        // Let other interested parties know about the change so that
+        // we don't have to recreate mutation observers everywher.
+        this.fire('iron-items-changed', mutations, {
+          bubbles: false,
+          cancelable: false
+        });
+
+        if (this.selected != null) {
+          this._updateSelected();
+        }
+      }.bind(this));
+      observer.observe(node, {
+        childList: true,
+        subtree: true
+      });
+      return observer;
+    },
+
+    _activateHandler: function(e) {
+      var t = e.target;
+      var items = this.items;
+      while (t && t != this) {
+        var i = items.indexOf(t);
+        if (i >= 0) {
+          var value = this._indexToValue(i);
+          this._itemActivate(value, t);
+          return;
+        }
+        t = t.parentNode;
+      }
+    },
+
+    _itemActivate: function(value, item) {
+      if (!this.fire('iron-activate',
+          {selected: value, item: item}, {cancelable: true}).defaultPrevented) {
+        this.select(value);
+      }
+    }
+
+  };
+/** @polymerBehavior Polymer.IronMultiSelectableBehavior */
+  Polymer.IronMultiSelectableBehaviorImpl = {
+    properties: {
+
+      /**
+       * If true, multiple selections are allowed.
+       */
+      multi: {
+        type: Boolean,
+        value: false,
+        observer: 'multiChanged'
+      },
+
+      /**
+       * Gets or sets the selected elements. This is used instead of `selected` when `multi`
+       * is true.
+       */
+      selectedValues: {
+        type: Array,
+        notify: true
+      },
+
+      /**
+       * Returns an array of currently selected items.
+       */
+      selectedItems: {
+        type: Array,
+        readOnly: true,
+        notify: true
+      },
+
+    },
+
+    observers: [
+      '_updateSelected(attrForSelected, selectedValues)'
+    ],
+
+    /**
+     * Selects the given value. If the `multi` property is true, then the selected state of the
+     * `value` will be toggled; otherwise the `value` will be selected.
+     *
+     * @method select
+     * @param {string} value the value to select.
+     */
+    select: function(value) {
+      if (this.multi) {
+        if (this.selectedValues) {
+          this._toggleSelected(value);
+        } else {
+          this.selectedValues = [value];
+        }
+      } else {
+        this.selected = value;
+      }
+    },
+
+    multiChanged: function(multi) {
+      this._selection.multi = multi;
+    },
+
+    _updateSelected: function() {
+      if (this.multi) {
+        this._selectMulti(this.selectedValues);
+      } else {
+        this._selectSelected(this.selected);
+      }
+    },
+
+    _selectMulti: function(values) {
+      this._selection.clear();
+      if (values) {
+        for (var i = 0; i < values.length; i++) {
+          this._selection.setItemSelected(this._valueToItem(values[i]), true);
+        }
+      }
+    },
+
+    _selectionChange: function() {
+      var s = this._selection.get();
+      if (this.multi) {
+        this._setSelectedItems(s);
+      } else {
+        this._setSelectedItems([s]);
+        this._setSelectedItem(s);
+      }
+    },
+
+    _toggleSelected: function(value) {
+      var i = this.selectedValues.indexOf(value);
+      var unselected = i < 0;
+      if (unselected) {
+        this.push('selectedValues',value);
+      } else {
+        this.splice('selectedValues',i,1);
+      }
+      this._selection.setItemSelected(this._valueToItem(value), unselected);
+    }
+  };
+
+  /** @polymerBehavior */
+  Polymer.IronMultiSelectableBehavior = [
+    Polymer.IronSelectableBehavior,
+    Polymer.IronMultiSelectableBehaviorImpl
+  ];
+/**
+  `iron-selector` is an element which can be used to manage a list of elements
+  that can be selected.  Tapping on the item will make the item selected.  The `selected` indicates
+  which item is being selected.  The default is to use the index of the item.
+
+  Example:
+
+      <iron-selector selected="0">
+        <div>Item 1</div>
+        <div>Item 2</div>
+        <div>Item 3</div>
+      </iron-selector>
+
+  If you want to use the attribute value of an element for `selected` instead of the index,
+  set `attrForSelected` to the name of the attribute.  For example, if you want to select item by
+  `name`, set `attrForSelected` to `name`.
+
+  Example:
+
+      <iron-selector attr-for-selected="name" selected="foo">
+        <div name="foo">Foo</div>
+        <div name="bar">Bar</div>
+        <div name="zot">Zot</div>
+      </iron-selector>
+
+  `iron-selector` is not styled. Use the `iron-selected` CSS class to style the selected element.
+
+  Example:
+
+      <style>
+        .iron-selected {
+          background: #eee;
+        }
+      </style>
+
+      ...
+
+      <iron-selector selected="0">
+        <div>Item 1</div>
+        <div>Item 2</div>
+        <div>Item 3</div>
+      </iron-selector>
+
+  @demo demo/index.html
+  */
+
+  Polymer({
+
+    is: 'iron-selector',
+
+    behaviors: [
+      Polymer.IronMultiSelectableBehavior
+    ]
+
+  });
 (function() {
     'use strict';
 
@@ -7767,586 +8347,6 @@ Polymer({
     Polymer.PaperButtonBehaviorImpl
   ];
 /**
-   * @param {!Function} selectCallback
-   * @constructor
-   */
-  Polymer.IronSelection = function(selectCallback) {
-    this.selection = [];
-    this.selectCallback = selectCallback;
-  };
-
-  Polymer.IronSelection.prototype = {
-
-    /**
-     * Retrieves the selected item(s).
-     *
-     * @method get
-     * @returns Returns the selected item(s). If the multi property is true,
-     * `get` will return an array, otherwise it will return
-     * the selected item or undefined if there is no selection.
-     */
-    get: function() {
-      return this.multi ? this.selection.slice() : this.selection[0];
-    },
-
-    /**
-     * Clears all the selection except the ones indicated.
-     *
-     * @method clear
-     * @param {Array} excludes items to be excluded.
-     */
-    clear: function(excludes) {
-      this.selection.slice().forEach(function(item) {
-        if (!excludes || excludes.indexOf(item) < 0) {
-          this.setItemSelected(item, false);
-        }
-      }, this);
-    },
-
-    /**
-     * Indicates if a given item is selected.
-     *
-     * @method isSelected
-     * @param {*} item The item whose selection state should be checked.
-     * @returns Returns true if `item` is selected.
-     */
-    isSelected: function(item) {
-      return this.selection.indexOf(item) >= 0;
-    },
-
-    /**
-     * Sets the selection state for a given item to either selected or deselected.
-     *
-     * @method setItemSelected
-     * @param {*} item The item to select.
-     * @param {boolean} isSelected True for selected, false for deselected.
-     */
-    setItemSelected: function(item, isSelected) {
-      if (item != null) {
-        if (isSelected) {
-          this.selection.push(item);
-        } else {
-          var i = this.selection.indexOf(item);
-          if (i >= 0) {
-            this.selection.splice(i, 1);
-          }
-        }
-        if (this.selectCallback) {
-          this.selectCallback(item, isSelected);
-        }
-      }
-    },
-
-    /**
-     * Sets the selection state for a given item. If the `multi` property
-     * is true, then the selected state of `item` will be toggled; otherwise
-     * the `item` will be selected.
-     *
-     * @method select
-     * @param {*} item The item to select.
-     */
-    select: function(item) {
-      if (this.multi) {
-        this.toggle(item);
-      } else if (this.get() !== item) {
-        this.setItemSelected(this.get(), false);
-        this.setItemSelected(item, true);
-      }
-    },
-
-    /**
-     * Toggles the selection state for `item`.
-     *
-     * @method toggle
-     * @param {*} item The item to toggle.
-     */
-    toggle: function(item) {
-      this.setItemSelected(item, !this.isSelected(item));
-    }
-
-  };
-/** @polymerBehavior */
-  Polymer.IronSelectableBehavior = {
-
-      /**
-       * Fired when iron-selector is activated (selected or deselected).
-       * It is fired before the selected items are changed.
-       * Cancel the event to abort selection.
-       *
-       * @event iron-activate
-       */
-
-      /**
-       * Fired when an item is selected
-       *
-       * @event iron-select
-       */
-
-      /**
-       * Fired when an item is deselected
-       *
-       * @event iron-deselect
-       */
-
-      /**
-       * Fired when the list of selectable items changes (e.g., items are
-       * added or removed). The detail of the event is a list of mutation
-       * records that describe what changed.
-       *
-       * @event iron-items-changed
-       */
-
-    properties: {
-
-      /**
-       * If you want to use the attribute value of an element for `selected` instead of the index,
-       * set this to the name of the attribute.
-       */
-      attrForSelected: {
-        type: String,
-        value: null
-      },
-
-      /**
-       * Gets or sets the selected element. The default is to use the index of the item.
-       */
-      selected: {
-        type: String,
-        notify: true
-      },
-
-      /**
-       * Returns the currently selected item.
-       */
-      selectedItem: {
-        type: Object,
-        readOnly: true,
-        notify: true
-      },
-
-      /**
-       * The event that fires from items when they are selected. Selectable
-       * will listen for this event from items and update the selection state.
-       * Set to empty string to listen to no events.
-       */
-      activateEvent: {
-        type: String,
-        value: 'tap',
-        observer: '_activateEventChanged'
-      },
-
-      /**
-       * This is a CSS selector string.  If this is set, only items that match the CSS selector
-       * are selectable.
-       */
-      selectable: String,
-
-      /**
-       * The class to set on elements when selected.
-       */
-      selectedClass: {
-        type: String,
-        value: 'iron-selected'
-      },
-
-      /**
-       * The attribute to set on elements when selected.
-       */
-      selectedAttribute: {
-        type: String,
-        value: null
-      },
-
-      /**
-       * The set of excluded elements where the key is the `localName`
-       * of the element that will be ignored from the item list.
-       *
-       * @type {object}
-       * @default {template: 1}
-       */
-      _excludedLocalNames: {
-        type: Object,
-        value: function() {
-          return {
-            'template': 1
-          };
-        }
-      }
-    },
-
-    observers: [
-      '_updateSelected(attrForSelected, selected)'
-    ],
-
-    created: function() {
-      this._bindFilterItem = this._filterItem.bind(this);
-      this._selection = new Polymer.IronSelection(this._applySelection.bind(this));
-      // TODO(cdata): When polymer/polymer#2535 lands, we do not need to do this
-      // book keeping anymore:
-      this.__listeningForActivate = false;
-    },
-
-    attached: function() {
-      this._observer = this._observeItems(this);
-      this._contentObserver = this._observeContent(this);
-      if (!this.selectedItem && this.selected) {
-        this._updateSelected(this.attrForSelected,this.selected)
-      }
-      this._addListener(this.activateEvent);
-    },
-
-    detached: function() {
-      if (this._observer) {
-        this._observer.disconnect();
-      }
-      if (this._contentObserver) {
-        this._contentObserver.disconnect();
-      }
-      this._removeListener(this.activateEvent);
-    },
-
-    /**
-     * Returns an array of selectable items.
-     *
-     * @property items
-     * @type Array
-     */
-    get items() {
-      var nodes = Polymer.dom(this).queryDistributedElements(this.selectable || '*');
-      return Array.prototype.filter.call(nodes, this._bindFilterItem);
-    },
-
-    /**
-     * Returns the index of the given item.
-     *
-     * @method indexOf
-     * @param {Object} item
-     * @returns Returns the index of the item
-     */
-    indexOf: function(item) {
-      return this.items.indexOf(item);
-    },
-
-    /**
-     * Selects the given value.
-     *
-     * @method select
-     * @param {string} value the value to select.
-     */
-    select: function(value) {
-      this.selected = value;
-    },
-
-    /**
-     * Selects the previous item.
-     *
-     * @method selectPrevious
-     */
-    selectPrevious: function() {
-      var length = this.items.length;
-      var index = (Number(this._valueToIndex(this.selected)) - 1 + length) % length;
-      this.selected = this._indexToValue(index);
-    },
-
-    /**
-     * Selects the next item.
-     *
-     * @method selectNext
-     */
-    selectNext: function() {
-      var index = (Number(this._valueToIndex(this.selected)) + 1) % this.items.length;
-      this.selected = this._indexToValue(index);
-    },
-
-    _addListener: function(eventName) {
-      if (!this.isAttached || this.__listeningForActivate) {
-        return;
-      }
-
-      this.__listeningForActivate = true;
-      this.listen(this, eventName, '_activateHandler');
-    },
-
-    _removeListener: function(eventName) {
-      this.unlisten(this, eventName, '_activateHandler');
-      this.__listeningForActivate = false;
-    },
-
-    _activateEventChanged: function(eventName, old) {
-      this._removeListener(old);
-      this._addListener(eventName);
-    },
-
-    _updateSelected: function() {
-      this._selectSelected(this.selected);
-    },
-
-    _selectSelected: function(selected) {
-      this._selection.select(this._valueToItem(this.selected));
-    },
-
-    _filterItem: function(node) {
-      return !this._excludedLocalNames[node.localName];
-    },
-
-    _valueToItem: function(value) {
-      return (value == null) ? null : this.items[this._valueToIndex(value)];
-    },
-
-    _valueToIndex: function(value) {
-      if (this.attrForSelected) {
-        for (var i = 0, item; item = this.items[i]; i++) {
-          if (this._valueForItem(item) == value) {
-            return i;
-          }
-        }
-      } else {
-        return Number(value);
-      }
-    },
-
-    _indexToValue: function(index) {
-      if (this.attrForSelected) {
-        var item = this.items[index];
-        if (item) {
-          return this._valueForItem(item);
-        }
-      } else {
-        return index;
-      }
-    },
-
-    _valueForItem: function(item) {
-      return item[this.attrForSelected] || item.getAttribute(this.attrForSelected);
-    },
-
-    _applySelection: function(item, isSelected) {
-      if (this.selectedClass) {
-        this.toggleClass(this.selectedClass, isSelected, item);
-      }
-      if (this.selectedAttribute) {
-        this.toggleAttribute(this.selectedAttribute, isSelected, item);
-      }
-      this._selectionChange();
-      this.fire('iron-' + (isSelected ? 'select' : 'deselect'), {item: item});
-    },
-
-    _selectionChange: function() {
-      this._setSelectedItem(this._selection.get());
-    },
-
-    // observe content changes under the given node.
-    _observeContent: function(node) {
-      var content = node.querySelector('content');
-      if (content && content.parentElement === node) {
-        return this._observeItems(node.domHost);
-      }
-    },
-
-    // observe items change under the given node.
-    _observeItems: function(node) {
-      // TODO(cdata): Update this when we get distributed children changed.
-      var observer = new MutationObserver(function(mutations) {
-        // Let other interested parties know about the change so that
-        // we don't have to recreate mutation observers everywher.
-        this.fire('iron-items-changed', mutations, {
-          bubbles: false,
-          cancelable: false
-        });
-
-        if (this.selected != null) {
-          this._updateSelected();
-        }
-      }.bind(this));
-      observer.observe(node, {
-        childList: true,
-        subtree: true
-      });
-      return observer;
-    },
-
-    _activateHandler: function(e) {
-      var t = e.target;
-      var items = this.items;
-      while (t && t != this) {
-        var i = items.indexOf(t);
-        if (i >= 0) {
-          var value = this._indexToValue(i);
-          this._itemActivate(value, t);
-          return;
-        }
-        t = t.parentNode;
-      }
-    },
-
-    _itemActivate: function(value, item) {
-      if (!this.fire('iron-activate',
-          {selected: value, item: item}, {cancelable: true}).defaultPrevented) {
-        this.select(value);
-      }
-    }
-
-  };
-/** @polymerBehavior Polymer.IronMultiSelectableBehavior */
-  Polymer.IronMultiSelectableBehaviorImpl = {
-    properties: {
-
-      /**
-       * If true, multiple selections are allowed.
-       */
-      multi: {
-        type: Boolean,
-        value: false,
-        observer: 'multiChanged'
-      },
-
-      /**
-       * Gets or sets the selected elements. This is used instead of `selected` when `multi`
-       * is true.
-       */
-      selectedValues: {
-        type: Array,
-        notify: true
-      },
-
-      /**
-       * Returns an array of currently selected items.
-       */
-      selectedItems: {
-        type: Array,
-        readOnly: true,
-        notify: true
-      },
-
-    },
-
-    observers: [
-      '_updateSelected(attrForSelected, selectedValues)'
-    ],
-
-    /**
-     * Selects the given value. If the `multi` property is true, then the selected state of the
-     * `value` will be toggled; otherwise the `value` will be selected.
-     *
-     * @method select
-     * @param {string} value the value to select.
-     */
-    select: function(value) {
-      if (this.multi) {
-        if (this.selectedValues) {
-          this._toggleSelected(value);
-        } else {
-          this.selectedValues = [value];
-        }
-      } else {
-        this.selected = value;
-      }
-    },
-
-    multiChanged: function(multi) {
-      this._selection.multi = multi;
-    },
-
-    _updateSelected: function() {
-      if (this.multi) {
-        this._selectMulti(this.selectedValues);
-      } else {
-        this._selectSelected(this.selected);
-      }
-    },
-
-    _selectMulti: function(values) {
-      this._selection.clear();
-      if (values) {
-        for (var i = 0; i < values.length; i++) {
-          this._selection.setItemSelected(this._valueToItem(values[i]), true);
-        }
-      }
-    },
-
-    _selectionChange: function() {
-      var s = this._selection.get();
-      if (this.multi) {
-        this._setSelectedItems(s);
-      } else {
-        this._setSelectedItems([s]);
-        this._setSelectedItem(s);
-      }
-    },
-
-    _toggleSelected: function(value) {
-      var i = this.selectedValues.indexOf(value);
-      var unselected = i < 0;
-      if (unselected) {
-        this.push('selectedValues',value);
-      } else {
-        this.splice('selectedValues',i,1);
-      }
-      this._selection.setItemSelected(this._valueToItem(value), unselected);
-    }
-  };
-
-  /** @polymerBehavior */
-  Polymer.IronMultiSelectableBehavior = [
-    Polymer.IronSelectableBehavior,
-    Polymer.IronMultiSelectableBehaviorImpl
-  ];
-/**
-  `iron-selector` is an element which can be used to manage a list of elements
-  that can be selected.  Tapping on the item will make the item selected.  The `selected` indicates
-  which item is being selected.  The default is to use the index of the item.
-
-  Example:
-
-      <iron-selector selected="0">
-        <div>Item 1</div>
-        <div>Item 2</div>
-        <div>Item 3</div>
-      </iron-selector>
-
-  If you want to use the attribute value of an element for `selected` instead of the index,
-  set `attrForSelected` to the name of the attribute.  For example, if you want to select item by
-  `name`, set `attrForSelected` to `name`.
-
-  Example:
-
-      <iron-selector attr-for-selected="name" selected="foo">
-        <div name="foo">Foo</div>
-        <div name="bar">Bar</div>
-        <div name="zot">Zot</div>
-      </iron-selector>
-
-  `iron-selector` is not styled. Use the `iron-selected` CSS class to style the selected element.
-
-  Example:
-
-      <style>
-        .iron-selected {
-          background: #eee;
-        }
-      </style>
-
-      ...
-
-      <iron-selector selected="0">
-        <div>Item 1</div>
-        <div>Item 2</div>
-        <div>Item 3</div>
-      </iron-selector>
-
-  @demo demo/index.html
-  */
-
-  Polymer({
-
-    is: 'iron-selector',
-
-    behaviors: [
-      Polymer.IronMultiSelectableBehavior
-    ]
-
-  });
-/**
    * `Polymer.PaperInkyFocusBehavior` implements a ripple when the element has keyboard focus.
    *
    * @polymerBehavior Polymer.PaperInkyFocusBehaviorImpl
@@ -8761,671 +8761,6 @@ Polymer({
       }
 
     });
-Polymer({
-    is: 'paper-material',
-
-    properties: {
-
-      /**
-       * The z-depth of this element, from 0-5. Setting to 0 will remove the
-       * shadow, and each increasing number greater than 0 will be "deeper"
-       * than the last.
-       *
-       * @attribute elevation
-       * @type number
-       * @default 1
-       */
-      elevation: {
-        type: Number,
-        reflectToAttribute: true,
-        value: 1
-      },
-
-      /**
-       * Set this to true to animate the shadow when setting a new
-       * `elevation` value.
-       *
-       * @attribute animated
-       * @type boolean
-       * @default false
-       */
-      animated: {
-        type: Boolean,
-        reflectToAttribute: true,
-        value: false
-      }
-    }
-  });
-(function() {
-    var Utility = {
-      distance: function(x1, y1, x2, y2) {
-        var xDelta = (x1 - x2);
-        var yDelta = (y1 - y2);
-
-        return Math.sqrt(xDelta * xDelta + yDelta * yDelta);
-      },
-
-      now: window.performance && window.performance.now ?
-          window.performance.now.bind(window.performance) : Date.now
-    };
-
-    /**
-     * @param {HTMLElement} element
-     * @constructor
-     */
-    function ElementMetrics(element) {
-      this.element = element;
-      this.width = this.boundingRect.width;
-      this.height = this.boundingRect.height;
-
-      this.size = Math.max(this.width, this.height);
-    }
-
-    ElementMetrics.prototype = {
-      get boundingRect () {
-        return this.element.getBoundingClientRect();
-      },
-
-      furthestCornerDistanceFrom: function(x, y) {
-        var topLeft = Utility.distance(x, y, 0, 0);
-        var topRight = Utility.distance(x, y, this.width, 0);
-        var bottomLeft = Utility.distance(x, y, 0, this.height);
-        var bottomRight = Utility.distance(x, y, this.width, this.height);
-
-        return Math.max(topLeft, topRight, bottomLeft, bottomRight);
-      }
-    };
-
-    /**
-     * @param {HTMLElement} element
-     * @constructor
-     */
-    function Ripple(element) {
-      this.element = element;
-      this.color = window.getComputedStyle(element).color;
-
-      this.wave = document.createElement('div');
-      this.waveContainer = document.createElement('div');
-      this.wave.style.backgroundColor = this.color;
-      this.wave.classList.add('wave');
-      this.waveContainer.classList.add('wave-container');
-      Polymer.dom(this.waveContainer).appendChild(this.wave);
-
-      this.resetInteractionState();
-    }
-
-    Ripple.MAX_RADIUS = 300;
-
-    Ripple.prototype = {
-      get recenters() {
-        return this.element.recenters;
-      },
-
-      get center() {
-        return this.element.center;
-      },
-
-      get mouseDownElapsed() {
-        var elapsed;
-
-        if (!this.mouseDownStart) {
-          return 0;
-        }
-
-        elapsed = Utility.now() - this.mouseDownStart;
-
-        if (this.mouseUpStart) {
-          elapsed -= this.mouseUpElapsed;
-        }
-
-        return elapsed;
-      },
-
-      get mouseUpElapsed() {
-        return this.mouseUpStart ?
-          Utility.now () - this.mouseUpStart : 0;
-      },
-
-      get mouseDownElapsedSeconds() {
-        return this.mouseDownElapsed / 1000;
-      },
-
-      get mouseUpElapsedSeconds() {
-        return this.mouseUpElapsed / 1000;
-      },
-
-      get mouseInteractionSeconds() {
-        return this.mouseDownElapsedSeconds + this.mouseUpElapsedSeconds;
-      },
-
-      get initialOpacity() {
-        return this.element.initialOpacity;
-      },
-
-      get opacityDecayVelocity() {
-        return this.element.opacityDecayVelocity;
-      },
-
-      get radius() {
-        var width2 = this.containerMetrics.width * this.containerMetrics.width;
-        var height2 = this.containerMetrics.height * this.containerMetrics.height;
-        var waveRadius = Math.min(
-          Math.sqrt(width2 + height2),
-          Ripple.MAX_RADIUS
-        ) * 1.1 + 5;
-
-        var duration = 1.1 - 0.2 * (waveRadius / Ripple.MAX_RADIUS);
-        var timeNow = this.mouseInteractionSeconds / duration;
-        var size = waveRadius * (1 - Math.pow(80, -timeNow));
-
-        return Math.abs(size);
-      },
-
-      get opacity() {
-        if (!this.mouseUpStart) {
-          return this.initialOpacity;
-        }
-
-        return Math.max(
-          0,
-          this.initialOpacity - this.mouseUpElapsedSeconds * this.opacityDecayVelocity
-        );
-      },
-
-      get outerOpacity() {
-        // Linear increase in background opacity, capped at the opacity
-        // of the wavefront (waveOpacity).
-        var outerOpacity = this.mouseUpElapsedSeconds * 0.3;
-        var waveOpacity = this.opacity;
-
-        return Math.max(
-          0,
-          Math.min(outerOpacity, waveOpacity)
-        );
-      },
-
-      get isOpacityFullyDecayed() {
-        return this.opacity < 0.01 &&
-          this.radius >= Math.min(this.maxRadius, Ripple.MAX_RADIUS);
-      },
-
-      get isRestingAtMaxRadius() {
-        return this.opacity >= this.initialOpacity &&
-          this.radius >= Math.min(this.maxRadius, Ripple.MAX_RADIUS);
-      },
-
-      get isAnimationComplete() {
-        return this.mouseUpStart ?
-          this.isOpacityFullyDecayed : this.isRestingAtMaxRadius;
-      },
-
-      get translationFraction() {
-        return Math.min(
-          1,
-          this.radius / this.containerMetrics.size * 2 / Math.sqrt(2)
-        );
-      },
-
-      get xNow() {
-        if (this.xEnd) {
-          return this.xStart + this.translationFraction * (this.xEnd - this.xStart);
-        }
-
-        return this.xStart;
-      },
-
-      get yNow() {
-        if (this.yEnd) {
-          return this.yStart + this.translationFraction * (this.yEnd - this.yStart);
-        }
-
-        return this.yStart;
-      },
-
-      get isMouseDown() {
-        return this.mouseDownStart && !this.mouseUpStart;
-      },
-
-      resetInteractionState: function() {
-        this.maxRadius = 0;
-        this.mouseDownStart = 0;
-        this.mouseUpStart = 0;
-
-        this.xStart = 0;
-        this.yStart = 0;
-        this.xEnd = 0;
-        this.yEnd = 0;
-        this.slideDistance = 0;
-
-        this.containerMetrics = new ElementMetrics(this.element);
-      },
-
-      draw: function() {
-        var scale;
-        var translateString;
-        var dx;
-        var dy;
-
-        this.wave.style.opacity = this.opacity;
-
-        scale = this.radius / (this.containerMetrics.size / 2);
-        dx = this.xNow - (this.containerMetrics.width / 2);
-        dy = this.yNow - (this.containerMetrics.height / 2);
-
-
-        // 2d transform for safari because of border-radius and overflow:hidden clipping bug.
-        // https://bugs.webkit.org/show_bug.cgi?id=98538
-        this.waveContainer.style.webkitTransform = 'translate(' + dx + 'px, ' + dy + 'px)';
-        this.waveContainer.style.transform = 'translate3d(' + dx + 'px, ' + dy + 'px, 0)';
-        this.wave.style.webkitTransform = 'scale(' + scale + ',' + scale + ')';
-        this.wave.style.transform = 'scale3d(' + scale + ',' + scale + ',1)';
-      },
-
-      /** @param {Event=} event */
-      downAction: function(event) {
-        var xCenter = this.containerMetrics.width / 2;
-        var yCenter = this.containerMetrics.height / 2;
-
-        this.resetInteractionState();
-        this.mouseDownStart = Utility.now();
-
-        if (this.center) {
-          this.xStart = xCenter;
-          this.yStart = yCenter;
-          this.slideDistance = Utility.distance(
-            this.xStart, this.yStart, this.xEnd, this.yEnd
-          );
-        } else {
-          this.xStart = event ?
-              event.detail.x - this.containerMetrics.boundingRect.left :
-              this.containerMetrics.width / 2;
-          this.yStart = event ?
-              event.detail.y - this.containerMetrics.boundingRect.top :
-              this.containerMetrics.height / 2;
-        }
-
-        if (this.recenters) {
-          this.xEnd = xCenter;
-          this.yEnd = yCenter;
-          this.slideDistance = Utility.distance(
-            this.xStart, this.yStart, this.xEnd, this.yEnd
-          );
-        }
-
-        this.maxRadius = this.containerMetrics.furthestCornerDistanceFrom(
-          this.xStart,
-          this.yStart
-        );
-
-        this.waveContainer.style.top =
-          (this.containerMetrics.height - this.containerMetrics.size) / 2 + 'px';
-        this.waveContainer.style.left =
-          (this.containerMetrics.width - this.containerMetrics.size) / 2 + 'px';
-
-        this.waveContainer.style.width = this.containerMetrics.size + 'px';
-        this.waveContainer.style.height = this.containerMetrics.size + 'px';
-      },
-
-      /** @param {Event=} event */
-      upAction: function(event) {
-        if (!this.isMouseDown) {
-          return;
-        }
-
-        this.mouseUpStart = Utility.now();
-      },
-
-      remove: function() {
-        Polymer.dom(this.waveContainer.parentNode).removeChild(
-          this.waveContainer
-        );
-      }
-    };
-
-    Polymer({
-      is: 'paper-ripple',
-
-      behaviors: [
-        Polymer.IronA11yKeysBehavior
-      ],
-
-      properties: {
-        /**
-         * The initial opacity set on the wave.
-         *
-         * @attribute initialOpacity
-         * @type number
-         * @default 0.25
-         */
-        initialOpacity: {
-          type: Number,
-          value: 0.25
-        },
-
-        /**
-         * How fast (opacity per second) the wave fades out.
-         *
-         * @attribute opacityDecayVelocity
-         * @type number
-         * @default 0.8
-         */
-        opacityDecayVelocity: {
-          type: Number,
-          value: 0.8
-        },
-
-        /**
-         * If true, ripples will exhibit a gravitational pull towards
-         * the center of their container as they fade away.
-         *
-         * @attribute recenters
-         * @type boolean
-         * @default false
-         */
-        recenters: {
-          type: Boolean,
-          value: false
-        },
-
-        /**
-         * If true, ripples will center inside its container
-         *
-         * @attribute recenters
-         * @type boolean
-         * @default false
-         */
-        center: {
-          type: Boolean,
-          value: false
-        },
-
-        /**
-         * A list of the visual ripples.
-         *
-         * @attribute ripples
-         * @type Array
-         * @default []
-         */
-        ripples: {
-          type: Array,
-          value: function() {
-            return [];
-          }
-        },
-
-        /**
-         * True when there are visible ripples animating within the
-         * element.
-         */
-        animating: {
-          type: Boolean,
-          readOnly: true,
-          reflectToAttribute: true,
-          value: false
-        },
-
-        /**
-         * If true, the ripple will remain in the "down" state until `holdDown`
-         * is set to false again.
-         */
-        holdDown: {
-          type: Boolean,
-          value: false,
-          observer: '_holdDownChanged'
-        },
-
-        /**
-         * If true, the ripple will not generate a ripple effect
-         * via pointer interaction.
-         * Calling ripple's imperative api like `simulatedRipple` will
-         * still generate the ripple effect.
-         */
-        noink: {
-          type: Boolean,
-          value: false
-        },
-
-        _animating: {
-          type: Boolean
-        },
-
-        _boundAnimate: {
-          type: Function,
-          value: function() {
-            return this.animate.bind(this);
-          }
-        }
-      },
-
-      observers: [
-        '_noinkChanged(noink, isAttached)'
-      ],
-
-      get target () {
-        var ownerRoot = Polymer.dom(this).getOwnerRoot();
-        var target;
-
-        if (this.parentNode.nodeType == 11) { // DOCUMENT_FRAGMENT_NODE
-          target = ownerRoot.host;
-        } else {
-          target = this.parentNode;
-        }
-
-        return target;
-      },
-
-      keyBindings: {
-        'enter:keydown': '_onEnterKeydown',
-        'space:keydown': '_onSpaceKeydown',
-        'space:keyup': '_onSpaceKeyup'
-      },
-
-      attached: function() {
-        this.listen(this.target, 'up', 'uiUpAction');
-        this.listen(this.target, 'down', 'uiDownAction');
-      },
-
-      detached: function() {
-        this.unlisten(this.target, 'up', 'uiUpAction');
-        this.unlisten(this.target, 'down', 'uiDownAction');
-      },
-
-      get shouldKeepAnimating () {
-        for (var index = 0; index < this.ripples.length; ++index) {
-          if (!this.ripples[index].isAnimationComplete) {
-            return true;
-          }
-        }
-
-        return false;
-      },
-
-      simulatedRipple: function() {
-        this.downAction(null);
-
-        // Please see polymer/polymer#1305
-        this.async(function() {
-          this.upAction();
-        }, 1);
-      },
-
-      /**
-       * Provokes a ripple down effect via a UI event,
-       * respecting the `noink` property.
-       * @param {Event=} event
-       */
-      uiDownAction: function(event) {
-        if (!this.noink) {
-          this.downAction(event);
-        }
-      },
-
-      /**
-       * Provokes a ripple down effect via a UI event,
-       * *not* respecting the `noink` property.
-       * @param {Event=} event
-       */
-      downAction: function(event) {
-        if (this.holdDown && this.ripples.length > 0) {
-          return;
-        }
-
-        var ripple = this.addRipple();
-
-        ripple.downAction(event);
-
-        if (!this._animating) {
-          this.animate();
-        }
-      },
-
-      /**
-       * Provokes a ripple up effect via a UI event,
-       * respecting the `noink` property.
-       * @param {Event=} event
-       */
-      uiUpAction: function(event) {
-        if (!this.noink) {
-          this.upAction(event);
-        }
-      },
-
-      /**
-       * Provokes a ripple up effect via a UI event,
-       * *not* respecting the `noink` property.
-       * @param {Event=} event
-       */
-      upAction: function(event) {
-        if (this.holdDown) {
-          return;
-        }
-
-        this.ripples.forEach(function(ripple) {
-          ripple.upAction(event);
-        });
-
-        this.animate();
-      },
-
-      onAnimationComplete: function() {
-        this._animating = false;
-        this.$.background.style.backgroundColor = null;
-        this.fire('transitionend');
-      },
-
-      addRipple: function() {
-        var ripple = new Ripple(this);
-
-        Polymer.dom(this.$.waves).appendChild(ripple.waveContainer);
-        this.$.background.style.backgroundColor = ripple.color;
-        this.ripples.push(ripple);
-
-        this._setAnimating(true);
-
-        return ripple;
-      },
-
-      removeRipple: function(ripple) {
-        var rippleIndex = this.ripples.indexOf(ripple);
-
-        if (rippleIndex < 0) {
-          return;
-        }
-
-        this.ripples.splice(rippleIndex, 1);
-
-        ripple.remove();
-
-        if (!this.ripples.length) {
-          this._setAnimating(false);
-        }
-      },
-
-      animate: function() {
-        var index;
-        var ripple;
-
-        this._animating = true;
-
-        for (index = 0; index < this.ripples.length; ++index) {
-          ripple = this.ripples[index];
-
-          ripple.draw();
-
-          this.$.background.style.opacity = ripple.outerOpacity;
-
-          if (ripple.isOpacityFullyDecayed && !ripple.isRestingAtMaxRadius) {
-            this.removeRipple(ripple);
-          }
-        }
-
-        if (!this.shouldKeepAnimating && this.ripples.length === 0) {
-          this.onAnimationComplete();
-        } else {
-          window.requestAnimationFrame(this._boundAnimate);
-        }
-      },
-
-      _onEnterKeydown: function() {
-        this.uiDownAction();
-        this.async(this.uiUpAction, 1);
-      },
-
-      _onSpaceKeydown: function() {
-        this.uiDownAction();
-      },
-
-      _onSpaceKeyup: function() {
-        this.uiUpAction();
-      },
-
-      // note: holdDown does not respect noink since it can be a focus based
-      // effect.
-      _holdDownChanged: function(newVal, oldVal) {
-        if (oldVal === undefined) {
-          return;
-        }
-        if (newVal) {
-          this.downAction();
-        } else {
-          this.upAction();
-        }
-      },
-
-      _noinkChanged: function(noink, attached) {
-        if (attached) {
-          this.keyEventTarget = noink ? this : this.target;
-        }
-      }
-    });
-  })();
-Polymer({
-    is: 'paper-button',
-
-    behaviors: [
-      Polymer.PaperButtonBehavior
-    ],
-
-    properties: {
-      /**
-       * If true, the button should be styled with a shadow.
-       */
-      raised: {
-        type: Boolean,
-        reflectToAttribute: true,
-        value: false,
-        observer: '_calculateElevation'
-      }
-    },
-
-    _calculateElevation: function() {
-      if (!this.raised) {
-        this.elevation = 0;
-      } else {
-        Polymer.PaperButtonBehaviorImpl._calculateElevation.apply(this);
-      }
-    }
-  });
 (function() {
 
     'use strict';
@@ -10126,6 +9461,609 @@ Polymer({
     });
 
   })();
+(function() {
+    var Utility = {
+      distance: function(x1, y1, x2, y2) {
+        var xDelta = (x1 - x2);
+        var yDelta = (y1 - y2);
+
+        return Math.sqrt(xDelta * xDelta + yDelta * yDelta);
+      },
+
+      now: window.performance && window.performance.now ?
+          window.performance.now.bind(window.performance) : Date.now
+    };
+
+    /**
+     * @param {HTMLElement} element
+     * @constructor
+     */
+    function ElementMetrics(element) {
+      this.element = element;
+      this.width = this.boundingRect.width;
+      this.height = this.boundingRect.height;
+
+      this.size = Math.max(this.width, this.height);
+    }
+
+    ElementMetrics.prototype = {
+      get boundingRect () {
+        return this.element.getBoundingClientRect();
+      },
+
+      furthestCornerDistanceFrom: function(x, y) {
+        var topLeft = Utility.distance(x, y, 0, 0);
+        var topRight = Utility.distance(x, y, this.width, 0);
+        var bottomLeft = Utility.distance(x, y, 0, this.height);
+        var bottomRight = Utility.distance(x, y, this.width, this.height);
+
+        return Math.max(topLeft, topRight, bottomLeft, bottomRight);
+      }
+    };
+
+    /**
+     * @param {HTMLElement} element
+     * @constructor
+     */
+    function Ripple(element) {
+      this.element = element;
+      this.color = window.getComputedStyle(element).color;
+
+      this.wave = document.createElement('div');
+      this.waveContainer = document.createElement('div');
+      this.wave.style.backgroundColor = this.color;
+      this.wave.classList.add('wave');
+      this.waveContainer.classList.add('wave-container');
+      Polymer.dom(this.waveContainer).appendChild(this.wave);
+
+      this.resetInteractionState();
+    }
+
+    Ripple.MAX_RADIUS = 300;
+
+    Ripple.prototype = {
+      get recenters() {
+        return this.element.recenters;
+      },
+
+      get center() {
+        return this.element.center;
+      },
+
+      get mouseDownElapsed() {
+        var elapsed;
+
+        if (!this.mouseDownStart) {
+          return 0;
+        }
+
+        elapsed = Utility.now() - this.mouseDownStart;
+
+        if (this.mouseUpStart) {
+          elapsed -= this.mouseUpElapsed;
+        }
+
+        return elapsed;
+      },
+
+      get mouseUpElapsed() {
+        return this.mouseUpStart ?
+          Utility.now () - this.mouseUpStart : 0;
+      },
+
+      get mouseDownElapsedSeconds() {
+        return this.mouseDownElapsed / 1000;
+      },
+
+      get mouseUpElapsedSeconds() {
+        return this.mouseUpElapsed / 1000;
+      },
+
+      get mouseInteractionSeconds() {
+        return this.mouseDownElapsedSeconds + this.mouseUpElapsedSeconds;
+      },
+
+      get initialOpacity() {
+        return this.element.initialOpacity;
+      },
+
+      get opacityDecayVelocity() {
+        return this.element.opacityDecayVelocity;
+      },
+
+      get radius() {
+        var width2 = this.containerMetrics.width * this.containerMetrics.width;
+        var height2 = this.containerMetrics.height * this.containerMetrics.height;
+        var waveRadius = Math.min(
+          Math.sqrt(width2 + height2),
+          Ripple.MAX_RADIUS
+        ) * 1.1 + 5;
+
+        var duration = 1.1 - 0.2 * (waveRadius / Ripple.MAX_RADIUS);
+        var timeNow = this.mouseInteractionSeconds / duration;
+        var size = waveRadius * (1 - Math.pow(80, -timeNow));
+
+        return Math.abs(size);
+      },
+
+      get opacity() {
+        if (!this.mouseUpStart) {
+          return this.initialOpacity;
+        }
+
+        return Math.max(
+          0,
+          this.initialOpacity - this.mouseUpElapsedSeconds * this.opacityDecayVelocity
+        );
+      },
+
+      get outerOpacity() {
+        // Linear increase in background opacity, capped at the opacity
+        // of the wavefront (waveOpacity).
+        var outerOpacity = this.mouseUpElapsedSeconds * 0.3;
+        var waveOpacity = this.opacity;
+
+        return Math.max(
+          0,
+          Math.min(outerOpacity, waveOpacity)
+        );
+      },
+
+      get isOpacityFullyDecayed() {
+        return this.opacity < 0.01 &&
+          this.radius >= Math.min(this.maxRadius, Ripple.MAX_RADIUS);
+      },
+
+      get isRestingAtMaxRadius() {
+        return this.opacity >= this.initialOpacity &&
+          this.radius >= Math.min(this.maxRadius, Ripple.MAX_RADIUS);
+      },
+
+      get isAnimationComplete() {
+        return this.mouseUpStart ?
+          this.isOpacityFullyDecayed : this.isRestingAtMaxRadius;
+      },
+
+      get translationFraction() {
+        return Math.min(
+          1,
+          this.radius / this.containerMetrics.size * 2 / Math.sqrt(2)
+        );
+      },
+
+      get xNow() {
+        if (this.xEnd) {
+          return this.xStart + this.translationFraction * (this.xEnd - this.xStart);
+        }
+
+        return this.xStart;
+      },
+
+      get yNow() {
+        if (this.yEnd) {
+          return this.yStart + this.translationFraction * (this.yEnd - this.yStart);
+        }
+
+        return this.yStart;
+      },
+
+      get isMouseDown() {
+        return this.mouseDownStart && !this.mouseUpStart;
+      },
+
+      resetInteractionState: function() {
+        this.maxRadius = 0;
+        this.mouseDownStart = 0;
+        this.mouseUpStart = 0;
+
+        this.xStart = 0;
+        this.yStart = 0;
+        this.xEnd = 0;
+        this.yEnd = 0;
+        this.slideDistance = 0;
+
+        this.containerMetrics = new ElementMetrics(this.element);
+      },
+
+      draw: function() {
+        var scale;
+        var translateString;
+        var dx;
+        var dy;
+
+        this.wave.style.opacity = this.opacity;
+
+        scale = this.radius / (this.containerMetrics.size / 2);
+        dx = this.xNow - (this.containerMetrics.width / 2);
+        dy = this.yNow - (this.containerMetrics.height / 2);
+
+
+        // 2d transform for safari because of border-radius and overflow:hidden clipping bug.
+        // https://bugs.webkit.org/show_bug.cgi?id=98538
+        this.waveContainer.style.webkitTransform = 'translate(' + dx + 'px, ' + dy + 'px)';
+        this.waveContainer.style.transform = 'translate3d(' + dx + 'px, ' + dy + 'px, 0)';
+        this.wave.style.webkitTransform = 'scale(' + scale + ',' + scale + ')';
+        this.wave.style.transform = 'scale3d(' + scale + ',' + scale + ',1)';
+      },
+
+      /** @param {Event=} event */
+      downAction: function(event) {
+        var xCenter = this.containerMetrics.width / 2;
+        var yCenter = this.containerMetrics.height / 2;
+
+        this.resetInteractionState();
+        this.mouseDownStart = Utility.now();
+
+        if (this.center) {
+          this.xStart = xCenter;
+          this.yStart = yCenter;
+          this.slideDistance = Utility.distance(
+            this.xStart, this.yStart, this.xEnd, this.yEnd
+          );
+        } else {
+          this.xStart = event ?
+              event.detail.x - this.containerMetrics.boundingRect.left :
+              this.containerMetrics.width / 2;
+          this.yStart = event ?
+              event.detail.y - this.containerMetrics.boundingRect.top :
+              this.containerMetrics.height / 2;
+        }
+
+        if (this.recenters) {
+          this.xEnd = xCenter;
+          this.yEnd = yCenter;
+          this.slideDistance = Utility.distance(
+            this.xStart, this.yStart, this.xEnd, this.yEnd
+          );
+        }
+
+        this.maxRadius = this.containerMetrics.furthestCornerDistanceFrom(
+          this.xStart,
+          this.yStart
+        );
+
+        this.waveContainer.style.top =
+          (this.containerMetrics.height - this.containerMetrics.size) / 2 + 'px';
+        this.waveContainer.style.left =
+          (this.containerMetrics.width - this.containerMetrics.size) / 2 + 'px';
+
+        this.waveContainer.style.width = this.containerMetrics.size + 'px';
+        this.waveContainer.style.height = this.containerMetrics.size + 'px';
+      },
+
+      /** @param {Event=} event */
+      upAction: function(event) {
+        if (!this.isMouseDown) {
+          return;
+        }
+
+        this.mouseUpStart = Utility.now();
+      },
+
+      remove: function() {
+        Polymer.dom(this.waveContainer.parentNode).removeChild(
+          this.waveContainer
+        );
+      }
+    };
+
+    Polymer({
+      is: 'paper-ripple',
+
+      behaviors: [
+        Polymer.IronA11yKeysBehavior
+      ],
+
+      properties: {
+        /**
+         * The initial opacity set on the wave.
+         *
+         * @attribute initialOpacity
+         * @type number
+         * @default 0.25
+         */
+        initialOpacity: {
+          type: Number,
+          value: 0.25
+        },
+
+        /**
+         * How fast (opacity per second) the wave fades out.
+         *
+         * @attribute opacityDecayVelocity
+         * @type number
+         * @default 0.8
+         */
+        opacityDecayVelocity: {
+          type: Number,
+          value: 0.8
+        },
+
+        /**
+         * If true, ripples will exhibit a gravitational pull towards
+         * the center of their container as they fade away.
+         *
+         * @attribute recenters
+         * @type boolean
+         * @default false
+         */
+        recenters: {
+          type: Boolean,
+          value: false
+        },
+
+        /**
+         * If true, ripples will center inside its container
+         *
+         * @attribute recenters
+         * @type boolean
+         * @default false
+         */
+        center: {
+          type: Boolean,
+          value: false
+        },
+
+        /**
+         * A list of the visual ripples.
+         *
+         * @attribute ripples
+         * @type Array
+         * @default []
+         */
+        ripples: {
+          type: Array,
+          value: function() {
+            return [];
+          }
+        },
+
+        /**
+         * True when there are visible ripples animating within the
+         * element.
+         */
+        animating: {
+          type: Boolean,
+          readOnly: true,
+          reflectToAttribute: true,
+          value: false
+        },
+
+        /**
+         * If true, the ripple will remain in the "down" state until `holdDown`
+         * is set to false again.
+         */
+        holdDown: {
+          type: Boolean,
+          value: false,
+          observer: '_holdDownChanged'
+        },
+
+        /**
+         * If true, the ripple will not generate a ripple effect
+         * via pointer interaction.
+         * Calling ripple's imperative api like `simulatedRipple` will
+         * still generate the ripple effect.
+         */
+        noink: {
+          type: Boolean,
+          value: false
+        },
+
+        _animating: {
+          type: Boolean
+        },
+
+        _boundAnimate: {
+          type: Function,
+          value: function() {
+            return this.animate.bind(this);
+          }
+        }
+      },
+
+      observers: [
+        '_noinkChanged(noink, isAttached)'
+      ],
+
+      get target () {
+        var ownerRoot = Polymer.dom(this).getOwnerRoot();
+        var target;
+
+        if (this.parentNode.nodeType == 11) { // DOCUMENT_FRAGMENT_NODE
+          target = ownerRoot.host;
+        } else {
+          target = this.parentNode;
+        }
+
+        return target;
+      },
+
+      keyBindings: {
+        'enter:keydown': '_onEnterKeydown',
+        'space:keydown': '_onSpaceKeydown',
+        'space:keyup': '_onSpaceKeyup'
+      },
+
+      attached: function() {
+        this.listen(this.target, 'up', 'uiUpAction');
+        this.listen(this.target, 'down', 'uiDownAction');
+      },
+
+      detached: function() {
+        this.unlisten(this.target, 'up', 'uiUpAction');
+        this.unlisten(this.target, 'down', 'uiDownAction');
+      },
+
+      get shouldKeepAnimating () {
+        for (var index = 0; index < this.ripples.length; ++index) {
+          if (!this.ripples[index].isAnimationComplete) {
+            return true;
+          }
+        }
+
+        return false;
+      },
+
+      simulatedRipple: function() {
+        this.downAction(null);
+
+        // Please see polymer/polymer#1305
+        this.async(function() {
+          this.upAction();
+        }, 1);
+      },
+
+      /**
+       * Provokes a ripple down effect via a UI event,
+       * respecting the `noink` property.
+       * @param {Event=} event
+       */
+      uiDownAction: function(event) {
+        if (!this.noink) {
+          this.downAction(event);
+        }
+      },
+
+      /**
+       * Provokes a ripple down effect via a UI event,
+       * *not* respecting the `noink` property.
+       * @param {Event=} event
+       */
+      downAction: function(event) {
+        if (this.holdDown && this.ripples.length > 0) {
+          return;
+        }
+
+        var ripple = this.addRipple();
+
+        ripple.downAction(event);
+
+        if (!this._animating) {
+          this.animate();
+        }
+      },
+
+      /**
+       * Provokes a ripple up effect via a UI event,
+       * respecting the `noink` property.
+       * @param {Event=} event
+       */
+      uiUpAction: function(event) {
+        if (!this.noink) {
+          this.upAction(event);
+        }
+      },
+
+      /**
+       * Provokes a ripple up effect via a UI event,
+       * *not* respecting the `noink` property.
+       * @param {Event=} event
+       */
+      upAction: function(event) {
+        if (this.holdDown) {
+          return;
+        }
+
+        this.ripples.forEach(function(ripple) {
+          ripple.upAction(event);
+        });
+
+        this.animate();
+      },
+
+      onAnimationComplete: function() {
+        this._animating = false;
+        this.$.background.style.backgroundColor = null;
+        this.fire('transitionend');
+      },
+
+      addRipple: function() {
+        var ripple = new Ripple(this);
+
+        Polymer.dom(this.$.waves).appendChild(ripple.waveContainer);
+        this.$.background.style.backgroundColor = ripple.color;
+        this.ripples.push(ripple);
+
+        this._setAnimating(true);
+
+        return ripple;
+      },
+
+      removeRipple: function(ripple) {
+        var rippleIndex = this.ripples.indexOf(ripple);
+
+        if (rippleIndex < 0) {
+          return;
+        }
+
+        this.ripples.splice(rippleIndex, 1);
+
+        ripple.remove();
+
+        if (!this.ripples.length) {
+          this._setAnimating(false);
+        }
+      },
+
+      animate: function() {
+        var index;
+        var ripple;
+
+        this._animating = true;
+
+        for (index = 0; index < this.ripples.length; ++index) {
+          ripple = this.ripples[index];
+
+          ripple.draw();
+
+          this.$.background.style.opacity = ripple.outerOpacity;
+
+          if (ripple.isOpacityFullyDecayed && !ripple.isRestingAtMaxRadius) {
+            this.removeRipple(ripple);
+          }
+        }
+
+        if (!this.shouldKeepAnimating && this.ripples.length === 0) {
+          this.onAnimationComplete();
+        } else {
+          window.requestAnimationFrame(this._boundAnimate);
+        }
+      },
+
+      _onEnterKeydown: function() {
+        this.uiDownAction();
+        this.async(this.uiUpAction, 1);
+      },
+
+      _onSpaceKeydown: function() {
+        this.uiDownAction();
+      },
+
+      _onSpaceKeyup: function() {
+        this.uiUpAction();
+      },
+
+      // note: holdDown does not respect noink since it can be a focus based
+      // effect.
+      _holdDownChanged: function(newVal, oldVal) {
+        if (oldVal === undefined) {
+          return;
+        }
+        if (newVal) {
+          this.downAction();
+        } else {
+          this.upAction();
+        }
+      },
+
+      _noinkChanged: function(noink, attached) {
+        if (attached) {
+          this.keyEventTarget = noink ? this : this.target;
+        }
+      }
+    });
+  })();
 Polymer({
       is: 'paper-icon-button',
 
@@ -10200,6 +10138,41 @@ Polymer({
         Polymer.IronButtonState
       ]
     });
+Polymer({
+    is: 'paper-material',
+
+    properties: {
+
+      /**
+       * The z-depth of this element, from 0-5. Setting to 0 will remove the
+       * shadow, and each increasing number greater than 0 will be "deeper"
+       * than the last.
+       *
+       * @attribute elevation
+       * @type number
+       * @default 1
+       */
+      elevation: {
+        type: Number,
+        reflectToAttribute: true,
+        value: 1
+      },
+
+      /**
+       * Set this to true to animate the shadow when setting a new
+       * `elevation` value.
+       *
+       * @attribute animated
+       * @type boolean
+       * @default false
+       */
+      animated: {
+        type: Boolean,
+        reflectToAttribute: true,
+        value: false
+      }
+    }
+  });
 (function() {
 
   Polymer({

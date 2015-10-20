@@ -3,6 +3,12 @@
   <head>
     <meta charset="utf-8">
     <title>AMP News</title>
+    <script>
+      navigator.serviceWorker.addEventListener("message", function(e) {
+        console.log(e);
+        document.getElementById("amp").innerHTML = e.data;
+      });
+    </script>
     <!--
         Losely derived from the list-card-over template:
         https://github.com/PolymerElements/app-layout-templates/blob/master/list-card-over/src/x-app.html
@@ -39,41 +45,16 @@
     <script async src="https://cdn.ampproject.org/v0.js"></script>
     <!-- End AMP Includes -->
 
+    <link rel="import" href="../src/elements.v.html">
     <!--
-    <link rel="import" href="elements.html" async>
+    <link rel="import" href="../src/elements.html">
     -->
-    <link rel="import" href="../src/elements.v.html" async>
     <link rel="stylesheet" href="../src/styles.css">
     <style>
-    /* Critical CSS is inline and styles the "app shell", giving it layout
-       and other styling to mimic the final look of the custom elements. The styling
-       for those elements is defined in their element definitions in and loaded
-       in elements.html. When the elements load + upgrade, their CSS will start
-       applying and the :unresolved pseudo selector will no longer apply. */
     html, body {
       font-family: 'Roboto', sans-serif;
-      /*
-      font-family: 'Questrial', Arial;
-      */
       background-color: #eee;
       margin: 0;
-    }
-
-    paper-toolbar, paper-card, paper-drawer-panel {
-      display: block;
-    }
-
-    paper-toolbar:unresolved.tall {
-      height: 192px;
-    }
-
-    paper-toolbar:unresolved {
-      color: #fff;
-      background: #42A5F5 !important;
-    }
-
-    paper-header-panel[drawer]:unresolved {
-      display: none;
     }
 
     .main-panel {
@@ -84,25 +65,10 @@
       background-color: #42A5F5;
     }
 
-    .list-panel {
-      padding: 0;
-      border-right: 1px solid #ccc;
-    }
-
     .list-panel paper-icon-item {
-      height: 80px;
+      height: 60px;
       border-bottom: 1px solid #dedede;
       background-color: #fafafa;
-    }
-
-    .main-panel[mode=cover] .content {
-      padding: 0 64px 0 4px;
-    }
-
-    .main-panel {
-      --paper-header-panel-cover-container: {
-        left: 64px;
-      };
     }
 
     paper-material {
@@ -112,36 +78,15 @@
       background-color: #fff;
       padding: 1em;
     }
-
-    paper-material:unresolved {
-      min-height: 1400px;
-      max-width: 640px;
-      top: 10px;
-      background-color: #fff;
-      display: block;
-      margin-top: -128px !important;
-      padding: 1em;
-    }
-
     .main-panel[mode=cover] paper-material {
       max-width: 640px;
       margin: 64px auto;
-    }
-
-    @media (min-width: 1024px) {
-
-      [main]:unresolved > .content {
-        padding-left: 400px;
-      }
-
-      /* FIXME(slightlyoff): fade the drawer in! */
     }
     </style>
   </head>
   <body class="fullbleed">
 
-    <paper-drawer-panel id="drawerPanel" responsive-width="1024px" drawer-width="400px">
-
+    <paper-drawer-panel id="drawerPanel" responsive-width="1024px" drawer-width="310px">
       <paper-header-panel drawer class="list-panel" mode="seamed">
         <paper-toolbar>
           <div>AMP News</div>
@@ -239,13 +184,6 @@
       </paper-header-panel>
     </paper-drawer-panel>
 
-    <script>
-      fetch("../SHOW_ME_WHAT_YOU_GOT").then(function(resp) {
-        resp.text().then(function(text) {
-          document.getElementById("amp").innerHTML = text;
-        })
-      });
-    </script>
     <!--
     <iron-media-query query="(max-width: 780px)" query-matches="{{_isMobile}}"></iron-media-query>
     -->
