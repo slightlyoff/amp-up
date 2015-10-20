@@ -1,0 +1,253 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>AMP News</title>
+    <!--
+        Losely derived from the list-card-over template:
+        https://github.com/PolymerElements/app-layout-templates/blob/master/list-card-over/src/x-app.html
+    -->
+    <meta name="viewport"
+        content="width=device-width, minimum-scale=1.0, initial-scale=1">
+
+    <link href='https://fonts.googleapis.com/css?family=Questrial'
+        rel='stylesheet' type='text/css'>
+
+    <!-- AMP Includes -->
+    <style>body {opacity: 0}</style>
+    <noscript>
+      <style>body {opacity: 1}</style>
+    </noscript>
+    <script async custom-element="amp-audio"
+        src="https://cdn.ampproject.org/v0/amp-audio-0.1.js"></script>
+    <script async custom-element="amp-anim"
+        src="https://cdn.ampproject.org/v0/amp-anim-0.1.js"></script>
+    <script async custom-element="amp-carousel"
+        src="https://cdn.ampproject.org/v0/amp-carousel-0.1.js"></script>
+    <script async custom-element="amp-iframe"
+        src="https://cdn.ampproject.org/v0/amp-iframe-0.1.js"></script>
+    <script async custom-element="amp-image-lightbox"
+        src="https://cdn.ampproject.org/v0/amp-image-lightbox-0.1.js"></script>
+    <script async custom-element="amp-instagram"
+        src="https://cdn.ampproject.org/v0/amp-instagram-0.1.js"></script>
+    <script async custom-element="amp-fit-text"
+        src="https://cdn.ampproject.org/v0/amp-fit-text-0.1.js"></script>
+    <script async custom-element="amp-twitter"
+        src="https://cdn.ampproject.org/v0/amp-twitter-0.1.js"></script>
+    <script async custom-element="amp-youtube"
+        src="https://cdn.ampproject.org/v0/amp-youtube-0.1.js"></script>
+    <script async src="https://cdn.ampproject.org/v0.js"></script>
+    <!-- End AMP Includes -->
+
+    <!--
+    <link rel="import" href="elements.html" async>
+    -->
+    <link rel="import" href="../src/elements.v.html" async>
+    <link rel="stylesheet" href="../src/styles.css">
+    <style>
+    /* Critical CSS is inline and styles the "app shell", giving it layout
+       and other styling to mimic the final look of the custom elements. The styling
+       for those elements is defined in their element definitions in and loaded
+       in elements.html. When the elements load + upgrade, their CSS will start
+       applying and the :unresolved pseudo selector will no longer apply. */
+    html, body {
+      font-family: 'Roboto', sans-serif;
+      /*
+      font-family: 'Questrial', Arial;
+      */
+      background-color: #eee;
+      margin: 0;
+    }
+
+    paper-toolbar, paper-card, paper-drawer-panel {
+      display: block;
+    }
+
+    paper-toolbar:unresolved.tall {
+      height: 192px;
+    }
+
+    paper-toolbar:unresolved {
+      color: #fff;
+      background: #42A5F5 !important;
+    }
+
+    paper-header-panel[drawer]:unresolved {
+      display: none;
+    }
+
+    .main-panel {
+      background-color: #eee;
+    }
+
+    paper-toolbar {
+      background-color: #42A5F5;
+    }
+
+    .list-panel {
+      padding: 0;
+      border-right: 1px solid #ccc;
+    }
+
+    .list-panel paper-icon-item {
+      height: 80px;
+      border-bottom: 1px solid #dedede;
+      background-color: #fafafa;
+    }
+
+    .main-panel[mode=cover] .content {
+      padding: 0 64px 0 4px;
+    }
+
+    .main-panel {
+      --paper-header-panel-cover-container: {
+        left: 64px;
+      };
+    }
+
+    paper-material {
+      min-height: 1400px;
+      max-width: 640px;
+      margin: 64px auto;
+      background-color: #fff;
+      padding: 1em;
+    }
+
+    paper-material:unresolved {
+      min-height: 1400px;
+      max-width: 640px;
+      top: 10px;
+      background-color: #fff;
+      display: block;
+      margin-top: -128px !important;
+      padding: 1em;
+    }
+
+    .main-panel[mode=cover] paper-material {
+      max-width: 640px;
+      margin: 64px auto;
+    }
+
+    @media (min-width: 1024px) {
+
+      [main]:unresolved > .content {
+        padding-left: 400px;
+      }
+
+      /* FIXME(slightlyoff): fade the drawer in! */
+    }
+    </style>
+  </head>
+  <body class="fullbleed">
+
+    <paper-drawer-panel id="drawerPanel" responsive-width="1024px" drawer-width="400px">
+
+      <paper-header-panel drawer class="list-panel" mode="seamed">
+        <paper-toolbar>
+          <div>AMP News</div>
+        </paper-toolbar>
+        <!-- List -->
+        <paper-menu class="list" on-iron-activate="_listTap">
+          <paper-icon-item>
+            <iron-icon icon="av:new-releases" item-icon></iron-icon>
+            Top Stories
+            <!-- <paper-ripple></paper-ripple> -->
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="social:whatshot" item-icon></iron-icon>
+            Most Popular
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="icons:bookmark-border" item-icon></iron-icon>
+            Saved for Later
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="editor:format-quote" item-icon></iron-icon>
+            Opinion
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="social:public" item-icon></iron-icon>
+            World
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="maps:directions-boat" item-icon></iron-icon>
+            San Francisco
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="av:hearing" item-icon></iron-icon>
+            Politics
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="image:flash-on" item-icon></iron-icon>
+            Science
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="hardware:developer-board" item-icon></iron-icon>
+            Technology
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="maps:local-dining" item-icon></iron-icon>
+            Food
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="editor:insert-chart" item-icon></iron-icon>
+            Business
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="maps:local-library" item-icon></iron-icon>
+            Books
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="icons:event-seat" item-icon></iron-icon>
+            Sports
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="icons:gesture" item-icon></iron-icon>
+            Arts
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="maps:local-movies" item-icon></iron-icon>
+            Movies
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="icons:face" item-icon></iron-icon>
+            Fashion &amp; Style
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="maps:flight" item-icon></iron-icon>
+            Travel
+          </paper-icon-item>
+          <paper-icon-item>
+            <iron-icon icon="av:movie" item-icon></iron-icon>
+            Video
+          </paper-icon-item>
+        </paper-menu>
+      </paper-header-panel>
+
+      <paper-header-panel main mode="cover">
+        <paper-toolbar class="tall" id="maintoolbar">
+          <paper-icon-button icon="menu" paper-drawer-toggle></paper-icon-button>
+          <!-- <div>AMP App Shell demo</div> -->
+        </paper-toolbar>
+
+
+        <div class="content">
+          <paper-material id="amp">
+            <!--____REPLACE_ME____-->
+          </paper-material>
+        </div>
+      </paper-header-panel>
+    </paper-drawer-panel>
+
+    <script>
+      fetch("../SHOW_ME_WHAT_YOU_GOT").then(function(resp) {
+        resp.text().then(function(text) {
+          document.getElementById("amp").innerHTML = text;
+        })
+      });
+    </script>
+    <!--
+    <iron-media-query query="(max-width: 780px)" query-matches="{{_isMobile}}"></iron-media-query>
+    -->
+  </body>
+</html>
