@@ -1,6 +1,6 @@
 "use strict";
 
-var VERSION = 4;
+var VERSION = 5;
 
 importScripts("src/serviceworker-cache-polyfill.js");
 
