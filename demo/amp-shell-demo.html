@@ -3,7 +3,9 @@
 <head>
   <meta charset="utf-8">
   <title>AMP Shell Demo</title>
+  <!--
   <link rel="canonical" href="amps.html" >
+  -->
   <meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1">
   <style amp-custom>
       body {
@@ -204,18 +206,16 @@
 
       // Find the amp-up root and load the SW relative to that
       var location = new URL(window.location);
-      var idx = location.pathname.lastIndexOf("demo/amp-shell-demo.html");
-      var dir = location.pathname.substring(0, idx);
+      // TODO(slightlyoff): make generic
+      var idx = location.pathname.lastIndexOf("/demo/");
+      var dir = location.pathname.substring(0, idx) + "/";
       var swURL = new URL(dir+"serviceworker.js", location.origin);
-      console.log(swURL);
+      // console.log(swURL);
       navigator.serviceWorker.register(swURL.href, {
         scope: dir
-      }).then(
-        function(registration) {
-          log(registration);
-        },
-        err
-      );
+      })
+      .then(log)
+      .catch(err);
 
     })();
   </script>

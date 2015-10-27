@@ -3,23 +3,42 @@ html, body {
   background-color: #eee;
   margin: 0;
 }
+
 paper-toolbar {
   color: #fff;
   background: #42A5F5 !important;
 }
+
+paper-toolbar:unresolved {
+  visiblity: hidden;
+}
+
+iron-icon:unresolved {
+  display: block;
+  width: 72px;
+  height: 60px;
+}
+
 paper-card {
   width: 600px;
   height: 400px;
   max-width: 100%;
   margin-bottom: 24px;
 }
+
 .scroll-content {
   margin: 60px;
 }
+
 paper-drawer-panel[selected="drawer"] paper-icon-button[icon="menu"] {
   z-index: auto;
 }
+
 paper-icon-button[icon="menu"] {
   position: relative;
   z-index: 1;
+}
+
+paper-menu {
+  padding: 0;
 }

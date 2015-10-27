@@ -4,10 +4,22 @@
     <meta charset="utf-8">
     <title>AMP News</title>
     <script>
-      navigator.serviceWorker.addEventListener("message", function(e) {
-        console.log(e);
-        document.getElementById("amp").innerHTML = e.data;
-      });
+      // Set up a listener to grab the content if it's postMessage'd to us
+      (function(global) {
+        "use strict";
+        global.contentReceived = false;
+
+        navigator.serviceWorker.addEventListener("message", function(e) {
+          console.log(e);
+          var container = document.getElementById("amp");
+          if (container) {
+            global.contentReceived = true;
+            container.innerHTML = e.data;
+          }
+        });
+        /*
+        */
+      })(this);
     </script>
     <!--
         Losely derived from the list-card-over template:
@@ -16,14 +28,12 @@
     <meta name="viewport"
         content="width=device-width, minimum-scale=1.0, initial-scale=1">
 
-    <link href='https://fonts.googleapis.com/css?family=Questrial'
-        rel='stylesheet' type='text/css'>
+    <!-- Only pulling this in to get WebComponentsReady, which feels busted -->
+    <!--
+    <script src="https://cdn.rawgit.com/webcomponents/webcomponentsjs/v0.7.15/webcomponents-lite.min.js"></script>
+    -->
 
     <!-- AMP Includes -->
-    <style>body {opacity: 0}</style>
-    <noscript>
-      <style>body {opacity: 1}</style>
-    </noscript>
     <script async custom-element="amp-audio"
         src="https://cdn.ampproject.org/v0/amp-audio-0.1.js"></script>
     <script async custom-element="amp-anim"
@@ -45,43 +55,130 @@
     <script async src="https://cdn.ampproject.org/v0.js"></script>
     <!-- End AMP Includes -->
 
-    <link rel="import" href="../src/elements.v.html">
     <!--
-    <link rel="import" href="../src/elements.html">
+    <link rel="import" href="../src/elements.v.html" async id="imports">
+    -->
+    <link rel="import" href="../src/elements.html" async id="imports">
+    <!--
+    <script>
+      document.getElementById("imports").onload = function(e) {
+        console.log(e);
+      }
+    </script>
     -->
     <link rel="stylesheet" href="../src/styles.css">
     <style>
-    html, body {
-      font-family: 'Roboto', sans-serif;
-      background-color: #eee;
-      margin: 0;
-    }
 
-    .main-panel {
-      background-color: #eee;
-    }
+      /* Critical CSS is inline and styles the "app shell", giving it layout
+         and other styling to mimic the final look of the custom elements. The
+         styling for those elements is defined in their element definitions in
+         and loaded in elements.html. When the elements load + upgrade, their
+         CSS will start applying and the :unresolved pseudo selector will no
+         longer apply. */
 
-    paper-toolbar {
-      background-color: #42A5F5;
-    }
+      html, body {
+        font-family: 'Roboto', sans-serif;
+        background-color: #eee;
+        margin: 0;
+      }
 
-    .list-panel paper-icon-item {
-      height: 60px;
-      border-bottom: 1px solid #dedede;
-      background-color: #fafafa;
-    }
+      paper-toolbar, paper-card, paper-drawer-panel {
+        display: block;
+      }
 
-    paper-material {
-      min-height: 1400px;
-      max-width: 640px;
-      margin: 64px auto;
-      background-color: #fff;
-      padding: 1em;
-    }
-    .main-panel[mode=cover] paper-material {
-      max-width: 640px;
-      margin: 64px auto;
-    }
+      paper-toolbar:unresolved.tall {
+        height: 192px;
+      }
+
+      paper-toolbar:unresolved {
+        color: #fff;
+        background: #42A5F5 !important;
+      }
+
+      paper-header-panel[drawer]:unresolved {
+        display: none;
+      }
+
+      .main-panel {
+        background-color: #eee;
+      }
+
+      paper-toolbar {
+        background-color: #42A5F5;
+      }
+
+      .list-panel {
+        padding: 0;
+        border-right: 1px solid #ccc;
+      }
+
+      .list-panel paper-icon-item {
+        height: 60px;
+        display: flex;
+        border-bottom: 1px solid #dedede;
+        background-color: #fafafa;
+      }
+
+      .main-panel[mode=cover] .content {
+        padding: 0 64px 0 4px;
+      }
+
+      .main-panel {
+        --paper-header-panel-cover-container: {
+          left: 64px;
+        };
+      }
+
+      paper-menu:unresolved {
+        padding-top: 8px;
+      }
+
+      paper-material {
+        min-height: 1400px;
+        max-width: 640px;
+        margin: 64px auto;
+        background-color: #fff;
+        padding: 1em;
+      }
+
+      paper-material:unresolved {
+        min-height: 1400px;
+        max-width: 640px;
+        top: 10px;
+        background-color: #fff;
+        display: block;
+        margin-top: -128px !important;
+        padding: 1em;
+      }
+
+      paper-icon-item:unresolved {
+        height: 60px;
+        margin: 0;
+        padding: 0px 16px;
+        line-height: 24px;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+      }
+
+      paper-icon-item:unresolved > iron-icon {
+        display: inline-block;
+        width: 24px;
+        padding-right: 22px;
+      }
+
+
+      .main-panel[mode=cover] paper-material {
+        max-width: 640px;
+        margin: 64px auto;
+      }
+
+      @media (min-width: 1024px) {
+        [main]:unresolved > .content {
+          padding-left: 310px;
+        }
+        /* FIXME(slightlyoff): fade the drawer in! */
+      }
     </style>
   </head>
   <body class="fullbleed">
@@ -175,7 +272,6 @@
           <!-- <div>AMP App Shell demo</div> -->
         </paper-toolbar>
 
-
         <div class="content">
           <paper-material id="amp">
             <!--____REPLACE_ME____-->
@@ -183,6 +279,35 @@
         </div>
       </paper-header-panel>
     </paper-drawer-panel>
+
+    <script>
+      // If we haven't received the content yet, request it
+      (function(global) {
+        "use strict";
+
+        var locationURL = new URL(window.location.href);
+        if (locationURL.search.indexOf("nocontent=1") >= 0) {
+          return;
+        }
+
+        if (!global.contentReceived) {
+          var container = document.getElementById("amp");
+          container.innerHTML = "...loading...";
+          // Go get it
+          var url = new URL(global.location);
+          url.search = "AMPOnly=1";
+          // console.log(url.href);
+          fetch(url.href).then(
+            function(response) {
+              response.text().then(function(text) {
+                container.innerHTML = text;
+              });
+            },
+            console.error.bind(console)
+          );
+        }
+      })(this);
+    </script>
 
     <!--
     <iron-media-query query="(max-width: 780px)" query-matches="{{_isMobile}}"></iron-media-query>
